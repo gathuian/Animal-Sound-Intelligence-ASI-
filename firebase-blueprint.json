@@ -9,6 +9,15 @@
         "email": { "type": "string" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
+        "accessibilitySettings": {
+          "type": "object",
+          "properties": {
+            "highContrast": { "type": "boolean" },
+            "largeText": { "type": "boolean" },
+            "simplifiedUI": { "type": "boolean" },
+            "screenReaderOptimized": { "type": "boolean" }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "email", "createdAt"]

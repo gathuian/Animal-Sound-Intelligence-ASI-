@@ -35,7 +35,7 @@ service cloud.firestore {
     // Entity Validations
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'createdAt']) 
-        && data.keys().size() <= 6
+        && data.keys().size() <= 7
         && data.uid == request.auth.uid
         && data.email is string && data.email.size() > 0 && data.email.size() <= 256
         && data.createdAt is timestamp;
@@ -43,7 +43,7 @@ service cloud.firestore {
 
     function isValidAnimalProfile(data) {
       return data.keys().hasAll(['userId', 'name', 'type', 'environment'])
-        && data.keys().size() <= 8
+        && data.keys().size() <= 9
         && data.userId == request.auth.uid
         && data.name is string && data.name.size() > 0 && data.name.size() <= 100
         && data.type is string && data.environment is string;
@@ -51,6 +51,7 @@ service cloud.firestore {
 
     function isValidAnalysisResult(data) {
       return data.keys().hasAll(['userId', 'timestamp', 'status'])
+        && data.keys().size() <= 10
         && data.userId == request.auth.uid
         && data.timestamp is timestamp
         && data.status is string;
@@ -61,7 +62,7 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && isEmailVerified() && isValidUser(incoming());
       allow update: if isOwner(userId) && isValidUser(incoming()) 
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL']);
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'accessibilitySettings', 'updatedAt']);
     }
 
     match /profiles/{profileId} {
