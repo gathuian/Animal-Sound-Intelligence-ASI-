@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "AnimalProfile": {
+      "title": "Animal Profile",
+      "description": "Information about a specific animal assigned to a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "environment": { "type": "string" },
+        "age": { "type": "string" },
+        "breed": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "type", "environment"]
+    },
+    "AnalysisResult": {
+      "title": "Analysis Result",
+      "description": "Historical sound analysis results",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "profileId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "emotion": { "type": "string" },
+        "intent": { "type": "string" },
+        "confidence": { "type": "number" },
+        "status": { "type": "string" },
+        "explanation": { "type": "string" }
+      },
+      "required": ["userId", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Public user profile data"
+    },
+    "/profiles/{profileId}": {
+      "schema": "AnimalProfile",
+      "description": "Animal profiles owned by users"
+    },
+    "/history/{analysisId}": {
+      "schema": "AnalysisResult",
+      "description": "Logs of all analyses performed"
+    }
+  }
+}

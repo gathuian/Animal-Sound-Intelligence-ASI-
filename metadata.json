@@ -1,0 +1,9 @@
+{
+  "name": "Animal Sound Intelligence (ASI)",
+  "description": "An AI-powered platform to interpret animal and pet sounds, monitor health, and detect emergencies using advanced Gemini multi-modal analysis.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
