@@ -3,6 +3,21 @@ export type AnimalType = 'Dog' | 'Cat' | 'Bird' | 'Livestock' | 'Exotic' | 'Wild
 export type Environment = 'Indoor' | 'Outdoor' | 'Farm' | 'Forest' | 'Urban';
 export type Status = 'Calm' | 'Alert' | 'Distressed' | 'Emergency';
 
+export interface AccessibilitySettings {
+  highContrast: boolean;
+  largeText: boolean;
+  simplifiedUI: boolean;
+  screenReaderOptimized: boolean;
+}
+
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  accessibilitySettings?: AccessibilitySettings;
+}
+
 export interface AnimalProfile {
   name: string;
   type: AnimalType;

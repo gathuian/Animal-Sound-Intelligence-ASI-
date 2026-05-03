@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { AnimalProfile, Status, SoundAnalysisResult } from './types';
+import { User, AnimalProfile, Status, SoundAnalysisResult, AccessibilitySettings } from './types';
 import Navigation from './components/Navigation';
-import { analyzeAnimalBehavior } from './services/geminiService';
+import { analyzeAnimalBehavior, GeminiError } from './services/geminiService';
 import { auth, db } from './services/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 
 // View Components
@@ -16,6 +16,13 @@ import TeachAI from './views/TeachAI';
 import Devices from './views/Devices';
 import ProfileView from './views/ProfileView';
 
+const defaultAccessibility: AccessibilitySettings = {
+  highContrast: false,
+  largeText: false,
+  simplifiedUI: false,
+  screenReaderOptimized: false
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,36 +30,49 @@ const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('home');
   const [recentStatus, setRecentStatus] = useState<Status>('Calm');
   const [lastAnalysis, setLastAnalysis] = useState<SoundAnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
       if (firebaseUser) {
         try {
-          // Sync user to Firestore
           const userRef = doc(db, 'users', firebaseUser.uid);
           const userSnap = await getDoc(userRef);
           
+          let userData: User;
           if (!userSnap.exists()) {
-            await setDoc(userRef, {
+            userData = {
               uid: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              displayName: firebaseUser.displayName || '',
-              photoURL: firebaseUser.photoURL || '',
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+              photoURL: firebaseUser.photoURL,
+              accessibilitySettings: defaultAccessibility
+            };
+            await setDoc(userRef, {
+              ...userData,
               createdAt: serverTimestamp()
             });
+          } else {
+            const data = userSnap.data();
+            userData = {
+              uid: data.uid,
+              email: data.email,
+              displayName: data.displayName,
+              photoURL: data.photoURL,
+              accessibilitySettings: data.accessibilitySettings || defaultAccessibility
+            };
           }
+          setUser(userData);
 
-          // Try to load animal profile from local storage or firestore (fallback)
           const savedProfile = localStorage.getItem(`asi_profile_${firebaseUser.uid}`);
           if (savedProfile) {
             setProfile(JSON.parse(savedProfile));
           }
         } catch (err) {
-          console.error("Firestore sync error:", err);
-          // If Firestore is not ready or rules are failing, we still have the firebaseUser in local state
+          console.error("Auth sync error:", err);
         }
       } else {
+        setUser(null);
         setProfile(null);
       }
       setLoading(false);
@@ -61,8 +81,15 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = (userData: User) => {
-    setUser(userData);
+  const updateAccessibility = async (settings: Partial<AccessibilitySettings>) => {
+    if (!user) return;
+    const newSettings = { ...user.accessibilitySettings!, ...settings };
+    setUser({ ...user, accessibilitySettings: newSettings });
+    try {
+      await setDoc(doc(db, 'users', user.uid), { accessibilitySettings: newSettings }, { merge: true });
+    } catch (err) {
+      console.error("Error updating accessibility:", err);
+    }
   };
 
   const handleProfileComplete = async (newProfile: AnimalProfile) => {
@@ -70,9 +97,7 @@ const App: React.FC = () => {
     try {
       setProfile(newProfile);
       localStorage.setItem(`asi_profile_${user.uid}`, JSON.stringify(newProfile));
-
-      // Save to profiles collection
-      const profileRef = doc(db, 'profiles', user.uid); // Using UID as ID for simplicity if 1:1, or addDoc
+      const profileRef = doc(db, 'profiles', user.uid);
       await setDoc(profileRef, {
         ...newProfile,
         userId: user.uid,
@@ -85,12 +110,12 @@ const App: React.FC = () => {
 
   const handleAnalyze = async (media: string, mime: string, isAudio: boolean) => {
     if (!profile || !user) return;
+    setError(null);
     try {
       const result = await analyzeAnimalBehavior(profile, media, mime, isAudio);
       setLastAnalysis(result);
       setRecentStatus(result.status);
 
-      // Save to history collection
       const historyRef = collection(db, 'history');
       await addDoc(historyRef, {
         userId: user.uid,
@@ -101,9 +126,9 @@ const App: React.FC = () => {
         status: result.status,
         explanation: result.explanation
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Error analyzing media. Please try again.");
+      setError(err instanceof GeminiError ? err.message : "Connection lost. Please try again.");
     }
   };
 
@@ -116,7 +141,7 @@ const App: React.FC = () => {
   }
 
   if (!user) {
-    return <Authentication onLogin={handleLogin} />;
+    return <Authentication onLogin={(userData: any) => setUser(userData)} />;
   }
 
   if (!profile) {
@@ -124,6 +149,10 @@ const App: React.FC = () => {
   }
 
   const renderContent = () => {
+    const commonProps = {
+      accessibility: user.accessibilitySettings || defaultAccessibility
+    };
+
     switch (currentTab) {
       case 'home':
         return <Home 
@@ -131,23 +160,48 @@ const App: React.FC = () => {
           status={recentStatus} 
           lastAnalysis={lastAnalysis}
           onQuickAnalyze={() => setCurrentTab('translator')}
+          {...commonProps}
         />;
       case 'translator':
-        return <Translator profile={profile} onAnalyze={handleAnalyze} />;
+        return <Translator profile={profile} onAnalyze={handleAnalyze} {...commonProps} />;
       case 'teach':
-        return <TeachAI profile={profile} />;
+        return <TeachAI profile={profile} {...commonProps} />;
       case 'devices':
-        return <Devices />;
+        return <Devices {...commonProps} />;
       case 'profile':
-        return <ProfileView profile={profile} onReset={() => setProfile(null)} />;
+        return (
+          <ProfileView 
+            profile={profile} 
+            user={user} 
+            onReset={() => setProfile(null)} 
+            onUpdateAccessibility={updateAccessibility}
+            {...commonProps}
+          />
+        );
       default:
-        return <Home profile={profile} status={recentStatus} lastAnalysis={null} onQuickAnalyze={() => {}} />;
+        return <Home profile={profile} status={recentStatus} lastAnalysis={null} onQuickAnalyze={() => {}} {...commonProps} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-16">
-      <header className="bg-white px-4 py-4 border-b border-slate-200 sticky top-0 z-40">
+    <div className={`min-h-screen flex flex-col pb-16 transition-all duration-300 ${
+      user.accessibilitySettings?.highContrast ? 'bg-black text-white' : 'bg-slate-50 text-slate-900'
+    } ${user.accessibilitySettings?.largeText ? 'text-lg' : 'text-base'}`}>
+      
+      {error && (
+        <div className="fixed top-20 left-4 right-4 z-50 animate-in slide-in-from-top-4">
+          <div className="bg-red-500 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between">
+            <span className="flex-1 text-sm font-bold">{error}</span>
+            <button onClick={() => setError(null)} className="ml-4 opacity-50 hover:opacity-100">
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <header className={`px-4 py-4 border-b sticky top-0 z-40 transition-colors ${
+        user.accessibilitySettings?.highContrast ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200'
+      }`}>
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
@@ -179,7 +233,7 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
 
-      <Navigation currentTab={currentTab} onTabChange={setCurrentTab} />
+      <Navigation currentTab={currentTab} accessibility={user.accessibilitySettings || defaultAccessibility} onTabChange={setCurrentTab} />
     </div>
   );
 };
